@@ -1,126 +1,303 @@
 # Kube-News
 
-Uma aplicação de notícias desenvolvida em NodeJS para demonstrar o uso de containers e Kubernetes.
+Portal de notícias desenvolvido em Node.js para demonstrar containerização e orquestração com Kubernetes.
 
-## 📋 Sobre o Projeto
+## Tecnologias
 
-O projeto Kube-News é uma aplicação web simples desenvolvida em Node.js, projetada como exemplo para demonstrar o uso de contêineres. É um portal de notícias que permite criar, visualizar e gerenciar artigos através de uma interface web.
+| Camada | Tecnologia |
+|--------|-----------|
+| Runtime | Node.js 18 (Alpine) |
+| Framework | Express.js |
+| Templates | EJS |
+| Banco de dados | PostgreSQL 15 (Alpine) |
+| ORM | Sequelize |
+| Métricas | Prometheus via express-prom-bundle |
+| Container | Docker + Docker Compose |
+| Orquestração | Kubernetes |
 
-### 🚀 Funcionalidades Principais
-
-- Listagem de notícias na página inicial
-- Criação de novas notícias através de formulário
-- Visualização detalhada de cada notícia
-- API REST para inserção em massa de notícias
-- Endpoints de health check para monitoramento
-- Coleta de métricas para Prometheus
-
-## 🛠️ Tecnologias Utilizadas
-
-- **Backend**: Node.js com Express.js
-- **Frontend**: EJS (Embedded JavaScript) como motor de templates
-- **Banco de Dados**: PostgreSQL com Sequelize ORM
-- **Monitoramento**: Prometheus (via express-prom-bundle)
-
-## 📦 Estrutura do Projeto
+## Estrutura do projeto
 
 ```
 /
-├── src/                      # Código-fonte principal
-│   ├── models/               # Modelos de dados
-│   │   └── post.js           # Definição do modelo Post
-│   ├── views/                # Templates EJS
-│   │   ├── partial/          # Componentes parciais (header, footer)
-│   │   ├── edit-news.ejs     # Formulário de edição
-│   │   ├── index.ejs         # Página principal
-│   │   └── view-news.ejs     # Visualização de notícia
-│   ├── static/               # Arquivos estáticos (CSS, imagens)
-│   ├── middleware.js         # Middlewares personalizados
-│   ├── server.js             # Ponto de entrada da aplicação
-│   ├── system-life.js        # Endpoints de health check
-│   └── package.json          # Dependências
-├── popula-dados.http         # Arquivo para popular o banco com dados de exemplo
-└── README.md                 # Documentação
+├── src/                    # Código-fonte
+│   ├── models/post.js      # Modelo de dados (Sequelize)
+│   ├── views/              # Templates EJS
+│   ├── static/             # CSS e imagens
+│   ├── server.js           # Entrypoint — escuta na porta 8080
+│   ├── system-life.js      # Endpoints de health e chaos
+│   ├── middleware.js       # Middlewares customizados
+│   ├── Dockerfile          # Imagem de produção (non-root, Alpine)
+│   └── package.json
+├── k8s/
+│   └── deploy.yaml         # Manifestos Kubernetes (Deployment + Service)
+├── popula-dados.http       # Requisições de exemplo para popular o banco
+└── docker-compose.yml      # Ambiente de desenvolvimento com hot-reload
 ```
 
-## 🔧 Configuração
+## Variáveis de ambiente
 
-### Pré-requisitos
+| Variável | Descrição | Padrão |
+|----------|-----------|--------|
+| `DB_HOST` | Host do PostgreSQL | `localhost` |
+| `DB_PORT` | Porta do PostgreSQL | `5432` |
+| `DB_DATABASE` | Nome do banco | `kubedevnews` |
+| `DB_USERNAME` | Usuário do banco | `kubedevnews` |
+| `DB_PASSWORD` | Senha do banco | `Pg#123` |
+| `DB_SSL_REQUIRE` | Habilitar SSL | `false` |
 
-- Node.js
-- PostgreSQL
-- Docker (opcional, para containerização)
-- Kubernetes (opcional, para orquestração)
+## Execução
 
-### Variáveis de Ambiente
+### 1. Local (Node.js)
 
-Para configurar a aplicação, defina as seguintes variáveis de ambiente:
-
-| Variável | Descrição | Valor Padrão |
-|----------|-----------|--------------|
-| DB_DATABASE | Nome do banco de dados | kubedevnews |
-| DB_USERNAME | Usuário do banco de dados | kubedevnews |
-| DB_PASSWORD | Senha do usuário | Pg#123 |
-| DB_HOST | Endereço do banco de dados | localhost |
-| DB_PORT | Porta do banco de dados | 5432 |
-| DB_SSL_REQUIRE | Habilitar SSL para conexão | false |
-
-## 🚀 Instalação e Execução
-
-### Execução Local
-
-1. Clone o repositório
-2. Instale as dependências:
-   ```bash
-   cd src
-   npm install
-   ```
-3. Configure as variáveis de ambiente necessárias
-4. Inicie a aplicação:
-   ```bash
-   npm start
-   ```
-5. Acesse a aplicação em [http://localhost:8080](http://localhost:8080)
-
-### População de Dados de Exemplo
-
-Utilize o arquivo `popula-dados.http` para inserir notícias de exemplo:
+**Pré-requisitos:** Node.js 18+, PostgreSQL 15 rodando localmente.
 
 ```bash
-# Com uma ferramenta como o REST Client no VS Code ou curl
-POST http://localhost:8080/api/post
-Content-Type: application/json
-# Conteúdo do arquivo popula-dados.http
+cd src
+npm install
+DB_HOST=localhost DB_PASSWORD=Pg#123 node server.js
 ```
 
-## 📊 Monitoramento e Health Checks
+Acesse: http://localhost:8080
 
-A aplicação disponibiliza endpoints para monitoramento e também recursos para simular cenários de falha, muito úteis para testar a resiliência em ambientes Kubernetes:
+---
 
-### Endpoints de Monitoramento
-- `/health` - Verifica o estado atual da aplicação (retorna status da aplicação e hostname da máquina)
-- `/ready` - Verifica se a aplicação está pronta para receber tráfego
-- `/metrics` - Métricas do Prometheus (geradas pelo express-prom-bundle)
+### 2. Docker Compose (recomendado para desenvolvimento)
 
-### Simulação de Falhas (Chaos Engineering)
-- `/unhealth` - (PUT) Altera o estado da aplicação para não saudável. Todas as requisições subsequentes receberão status code 500.
-- `/unreadyfor/:seconds` - (PUT) Simula indisponibilidade temporária por um número específico de segundos. Durante este período, o endpoint `/ready` retornará status code 500.
+**Pré-requisitos:** Docker Desktop.
 
-Estes recursos de simulação de falhas são extremamente úteis para testar:
-- Comportamento de probes de liveness e readiness no Kubernetes
-- Políticas de retry e circuit breaker
-- Mecanismos de failover
-- Resiliência geral da sua infraestrutura
+```bash
+# Subir app + banco com hot-reload
+docker compose up -d
 
-## 🔒 Modelo de Dados
+# Acompanhar logs
+docker compose logs -f app
 
-O projeto utiliza um único modelo `Post` com os seguintes campos:
+# Parar (mantém dados)
+docker compose down
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| title | String | Título da notícia (limite: 30 caracteres) |
-| summary | String | Resumo da notícia (limite: 50 caracteres) |
-| content | String | Conteúdo completo (limite: 2000 caracteres) |
-| publishDate | Date | Data de publicação |
+# Parar e apagar dados
+docker compose down -v
+```
 
+O código em `src/` é montado como volume — alterações refletem automaticamente sem rebuild.
 
+Acesse: http://localhost:8080
+
+---
+
+### 3. Kubernetes
+
+**Pré-requisitos:** cluster Kubernetes com `kubectl` configurado, imagem buildada localmente.
+
+#### Buildar a imagem
+
+```bash
+docker build -t kube-news:1.0.0 ./src
+```
+
+> No Docker Desktop, a imagem fica disponível ao cluster automaticamente.  
+> Para outros clusters, faça o push para um registry: `docker push <registry>/kube-news:1.0.0`  
+> e atualize o campo `image:` no `k8s/deploy.yaml`.
+
+#### Aplicar os manifestos
+
+```bash
+kubectl apply -f k8s/deploy.yaml
+```
+
+#### Verificar os pods
+
+```bash
+kubectl get pods -l app=kube-news
+kubectl get services -l app=kube-news
+```
+
+#### Acessar a aplicação
+
+O Service padrão é `ClusterIP`. Para expor localmente:
+
+```bash
+kubectl port-forward service/kube-news 8080:80
+```
+
+Acesse: http://localhost:8080
+
+##### Acesso permanente (macOS — Docker Desktop com kind)
+
+> Clusters kind no Docker Desktop usam rede interna isolada do macOS.  
+> NodePort e LoadBalancer não são roteáveis diretamente pelo host.  
+> Use um agente launchd para manter o port-forward ativo após reboot:
+
+```bash
+# Criar o agente
+cat > ~/Library/LaunchAgents/dev.kube-news.portforward.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.kube-news.portforward</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/kubectl</string>
+    <string>port-forward</string>
+    <string>service/kube-news</string>
+    <string>8080:80</string>
+    <string>--namespace</string>
+    <string>default</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/kube-news-portforward.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/kube-news-portforward.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/SEU_USUARIO</string>
+    <key>KUBECONFIG</key>
+    <string>/Users/SEU_USUARIO/.kube/config</string>
+  </dict>
+</dict>
+</plist>
+EOF
+
+# Ativar
+launchctl load ~/Library/LaunchAgents/dev.kube-news.portforward.plist
+```
+
+#### Popular o banco no cluster
+
+```bash
+kubectl exec deployment/postgres -- \
+  psql -U kubedevnews -d kubedevnews -c "SELECT COUNT(*) FROM \"Posts\";"
+```
+
+---
+
+## Build de produção e CI/CD
+
+### Build e push manual
+
+```bash
+docker build -t kube-news:1.0.0 ./src
+docker tag kube-news:1.0.0 ghcr.io/<seu-usuario>/kube-news:1.0.0
+docker push ghcr.io/<seu-usuario>/kube-news:1.0.0
+```
+
+### Pipeline GitHub Actions
+
+O repositório inclui suporte para pipeline CI/CD via GitHub Actions com build automático, push para `ghcr.io` e smoke test no `/health`.
+
+Exemplo de pipeline em `.github/workflows/ci.yml`:
+
+```yaml
+name: CI/CD
+on:
+  push:
+    branches: [main]
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./src
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/kube-news:latest
+            ghcr.io/${{ github.repository }}/kube-news:${{ github.sha }}
+```
+
+---
+
+## Endpoints
+
+### Aplicação
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/` | GET | Listagem de notícias |
+| `/post` | GET | Formulário de criação |
+| `/post` | POST | Criar notícia |
+| `/post/:id` | GET | Visualizar notícia |
+| `/api/post` | POST | Inserção em massa via JSON |
+
+### Monitoramento
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/health` | GET | Liveness — retorna `{"state":"up","machine":"<hostname>"}` |
+| `/ready` | GET | Readiness — retorna `200 Ok` ou `500` |
+| `/metrics` | GET | Métricas Prometheus |
+
+### Chaos Engineering
+
+Úteis para testar probes de liveness/readiness e resiliência no Kubernetes:
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/unhealth` | PUT | Coloca a app em estado não saudável (todas as requests retornam 500) |
+| `/unreadyfor/:seconds` | PUT | Simula indisponibilidade por N segundos (`/ready` retorna 500) |
+
+```bash
+# Simular falha de liveness
+curl -X PUT http://localhost:8080/unhealth
+
+# Simular indisponibilidade por 30 segundos
+curl -X PUT http://localhost:8080/unreadyfor/30
+```
+
+---
+
+## Modelo de dados
+
+Tabela `Posts`:
+
+| Campo | Tipo | Limite |
+|-------|------|--------|
+| `title` | String | 30 caracteres |
+| `summary` | String | 50 caracteres |
+| `content` | String | 2000 caracteres |
+| `publishDate` | Date | — |
+
+### Popular o banco com dados de exemplo
+
+```bash
+# Via Docker Compose
+curl -s -X POST http://localhost:8080/api/post \
+  -H "Content-Type: application/json" \
+  -d @popula-dados.http
+
+# Ou usar o arquivo .http com REST Client (VS Code)
+```
+
+---
+
+## Recursos Kubernetes criados
+
+O arquivo `k8s/deploy.yaml` cria os seguintes recursos:
+
+| Recurso | Nome | Descrição |
+|---------|------|-----------|
+| Deployment | `postgres` | PostgreSQL 15 Alpine |
+| Service | `postgres` | ClusterIP interno — resolvido como `DB_HOST=postgres` |
+| Deployment | `kube-news` | Aplicação Node.js 18 Alpine |
+| Service | `kube-news` | ClusterIP na porta 80 → container 8080 |
+
+Probes configuradas:
+- **startupProbe** na app: aguarda até 120s para o banco estar pronto (equivalente ao `depends_on: service_healthy` do Compose)
+- **livenessProbe**: `GET /health` — alinhada ao `HEALTHCHECK` do Dockerfile
+- **readinessProbe**: `GET /ready` — controlada pelos endpoints de chaos
