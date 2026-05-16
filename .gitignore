@@ -104,3 +104,6 @@ node_modules/
 # .tern-port
 
 *.Identifier
+
+# volumes locais de desenvolvimento
+.docker_vol/

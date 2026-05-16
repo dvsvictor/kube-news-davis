@@ -1,0 +1,38 @@
+services:
+
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kubedevnews
+      POSTGRES_USER: kubedevnews
+      POSTGRES_PASSWORD: Pg#123
+    volumes:
+      - ./.docker_vol/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kubedevnews -d kubedevnews"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: kubedevnews
+      DB_USERNAME: kubedevnews
+      DB_PASSWORD: Pg#123
+      DB_SSL_REQUIRE: "false"
+    volumes:
+      - ./src:/app                              # hot-reload: código-fonte local
+      - ./.docker_vol/node_modules:/app/node_modules  # node_modules isolado do host
+    command: sh -c "npm install && npx nodemon server.js"
+    depends_on:
+      db:
+        condition: service_healthy
