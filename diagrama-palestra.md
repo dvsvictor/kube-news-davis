@@ -1,194 +1,207 @@
-# Diagramas — Arquitetura do Cluster Kubernetes
-**Gerado em:** 16/05/2026 — baseado em `relatorio_atual.md`
+# Diagramas da Arquitetura — Kube-News Cluster
+**Gerado em:** 2026-05-16 | **Cluster:** docker-desktop (kind) | **K8s:** v1.34.2
 
 ---
 
-## 1. Arquitetura Geral do Cluster
-
-Visão completa da infraestrutura: host macOS → VM Docker Desktop → nós → namespaces → pods.
+## Diagrama 1 — Arquitetura Geral
 
 ```mermaid
 flowchart TD
-    subgraph HOST["🖥️ macOS (Apple Silicon — arm64)"]
-        USER["👤 Usuário\nlocalhost:8080"]
-        PF["kubectl port-forward\nPID 73639"]
-        DOCKER["Docker Desktop\n10 vCPUs / 8 GB RAM"]
-    end
-
-    subgraph VM["🐧 VM Linux — Debian 12 (6.12.76-linuxkit)"]
-        subgraph CP["desktop-control-plane · 172.18.0.2"]
-            API["kube-apiserver"]
-            ETCD["etcd"]
-            SCHED["kube-scheduler"]
-            CM["kube-controller-manager"]
-            DNS1["coredns (x2)"]
-            KN1["kindnet"]
-            KP1["kube-proxy"]
-            LPP["local-path-provisioner"]
-        end
-
-        subgraph W1["desktop-worker · 172.18.0.3  ⚠️ ocioso"]
-            KN2["kindnet"]
-            KP2["kube-proxy"]
-        end
-
-        subgraph W2["desktop-worker2 · 172.18.0.4"]
-            subgraph NS_DEFAULT["namespace: default"]
-                APP["🌐 kube-news\n10.244.2.3:8080\n⚠️ 2 restarts"]
-                DB["🐘 postgres\n10.244.2.4:5432"]
+    subgraph HOST["🖥️ Host macOS (Apple Silicon arm64)"]
+        subgraph DD["Docker Desktop"]
+            subgraph CP["desktop-control-plane (172.18.0.2)"]
+                CP_ROLE["🔒 control-plane\nTaint: NoSchedule"]
+                API["kube-apiserver"]
+                ETCD["etcd"]
+                SCHED["kube-scheduler"]
+                CM["kube-controller-manager"]
+                CORE1["coredns (10.244.0.2)"]
+                CORE2["coredns (10.244.0.3)"]
+                LPP["local-path-provisioner"]
             end
-            KN3["kindnet"]
-            KP3["kube-proxy"]
+
+            subgraph W1["desktop-worker (172.18.0.3)"]
+                W1_INFO["worker · 10 CPU · 7.9GB RAM"]
+                KN["kube-news:1.0.0\n10.244.1.3:8080\n⚠️ 2 restarts"]
+                SVC_KN["Service: kube-news\nClusterIP 10.96.20.6:80"]
+            end
+
+            subgraph W2["desktop-worker2 (172.18.0.4)"]
+                W2_INFO["worker · 10 CPU · 7.9GB RAM"]
+                PG["postgres:15-alpine\n10.244.2.5:5432\n🔴 Sem PVC"]
+                SVC_PG["Service: postgres\nClusterIP 10.96.184.193:5432"]
+            end
         end
     end
 
-    USER -->|"port-forward\n8080→80"| PF
-    PF -->|"ClusterIP\n10.96.170.86:80"| APP
-    APP -->|"ClusterIP\n10.96.35.207:5432"| DB
-    DOCKER --> VM
+    KN -->|"ECONNREFUSED\nno startup (race)"| SVC_PG
+    KN -->|"conectado\napós 2 restarts"| SVC_PG
+    SVC_PG --> PG
+    SVC_KN --> KN
+
+    style KN fill:#fff3cd,stroke:#ffc107
+    style PG fill:#f8d7da,stroke:#dc3545
+    style CP_ROLE fill:#e2e3e5,stroke:#6c757d
 ```
 
 ---
 
-## 2. Fluxo de Acesso à Aplicação (Atual vs. Ideal)
-
-Comparativo entre o acesso atual via port-forward e o acesso ideal via Ingress.
+## Diagrama 2 — Fluxo de Acesso: Atual vs. Ideal
 
 ```mermaid
 flowchart LR
-    subgraph ATUAL["🔴 Acesso Atual (frágil)"]
-        direction LR
-        U1["👤 Usuário"] -->|"localhost:8080"| PF["kubectl\nport-forward"]
-        PF -->|"TCP tunnel"| SVC1["Service: kube-news\nClusterIP :80"]
-        SVC1 --> POD1["Pod: kube-news\n:8080"]
-        POD1 -->|"DB_HOST=postgres"| SVC2["Service: postgres\nClusterIP :5432"]
-        SVC2 --> POD2["Pod: postgres\n:5432"]
+    subgraph ATUAL["🔴 Acesso Atual (Inadequado)"]
+        USER1["👤 Usuário"] -->|"kubectl port-forward\npod/kube-news 8080:8080"| KN1["kube-news pod\n(10.244.1.3:8080)"]
+        NOTE1["⚠️ Requer sessão de terminal ativa\nNão escalável\nSem TLS\nSem load balancing"]
     end
 
-    subgraph IDEAL["✅ Acesso Ideal (com Ingress)"]
-        direction LR
-        U2["👤 Usuário"] -->|"kube-news.local:80"| ING["Ingress NGINX\nkube-news.local → /"]
-        ING --> SVC3["Service: kube-news\nClusterIP :80"]
-        SVC3 --> POD3["Pod: kube-news\n:8080"]
-        POD3 --> SVC4["Service: postgres\nClusterIP :5432"]
-        SVC4 --> POD4["Pod: postgres\n:5432"]
+    subgraph IDEAL["✅ Acesso Ideal (Com Ingress)"]
+        USER2["👤 Usuário"] -->|"http://kube-news.local"| ING["NGINX Ingress Controller\n(NodePort 80/443)"]
+        ING -->|"Ingress Resource\nhost: kube-news.local"| SVC2["Service kube-news\nClusterIP 10.96.20.6:80"]
+        SVC2 --> KN2["kube-news pod\n(10.244.1.3:8080)"]
+        NOTE2["✅ Roteamento declarativo\nEscalável com HPA\nSuporta TLS via cert-manager\nLoad balancing automático"]
     end
+
+    style ATUAL fill:#f8d7da,stroke:#dc3545
+    style IDEAL fill:#d1e7dd,stroke:#198754
 ```
 
 ---
 
-## 3. Distribuição de Pods por Nó
-
-Mostra onde cada pod está agendado no cluster.
+## Diagrama 3 — Distribuição de Pods por Nó
 
 ```mermaid
 flowchart TD
-    subgraph CP["🔷 desktop-control-plane\n172.18.0.2 · CIDR 10.244.0.0/24"]
-        P1["📦 kube-apiserver"]
-        P2["📦 etcd"]
-        P3["📦 kube-scheduler"]
-        P4["📦 kube-controller-manager"]
-        P5["📦 coredns (x2)"]
-        P6["📦 kindnet"]
-        P7["📦 kube-proxy"]
-        P8["📦 local-path-provisioner"]
+    CLUSTER["🌐 Cluster docker-desktop"]
+
+    subgraph NODE_CP["desktop-control-plane (172.18.0.2)"]
+        CP_TAINT["🔒 Taint: NoSchedule\n(sem workloads de app)"]
+        POD_API["kube-apiserver"]
+        POD_ETCD["etcd"]
+        POD_SCHED["kube-scheduler"]
+        POD_CM["kube-controller-manager"]
+        POD_DNS1["coredns ×2"]
+        POD_LPP["local-path-provisioner"]
+        POD_KN_CP["kindnet + kube-proxy"]
     end
 
-    subgraph W1["🔶 desktop-worker\n172.18.0.3 · CIDR 10.244.1.0/24\n⚠️ NENHUMA carga de trabalho de aplicação"]
-        P9["📦 kindnet"]
-        P10["📦 kube-proxy"]
+    subgraph NODE_W1["desktop-worker (172.18.0.3)"]
+        W1_LOAD["CPU: 2% req · 6% limit\nMem: 2% req · 3% limit"]
+        POD_APP["⚠️ kube-news:1.0.0\n(2 restarts)"]
+        POD_KN_W1["kindnet + kube-proxy"]
     end
 
-    subgraph W2["🟢 desktop-worker2\n172.18.0.4 · CIDR 10.244.2.0/24"]
-        P11["🌐 kube-news\n10.244.2.3 · ⚠️ 2 restarts"]
-        P12["🐘 postgres\n10.244.2.4 · sem PVC"]
-        P13["📦 kindnet"]
-        P14["📦 kube-proxy"]
+    subgraph NODE_W2["desktop-worker2 (172.18.0.4)"]
+        W2_LOAD["CPU: 2% req · 6% limit\nMem: 3% req · 7% limit"]
+        POD_DB["🔴 postgres:15-alpine\n(sem PVC)"]
+        POD_KN_W2["kindnet + kube-proxy"]
     end
+
+    CLUSTER --> NODE_CP
+    CLUSTER --> NODE_W1
+    CLUSTER --> NODE_W2
+
+    style POD_APP fill:#fff3cd,stroke:#ffc107
+    style POD_DB fill:#f8d7da,stroke:#dc3545
+    style CP_TAINT fill:#e2e3e5,stroke:#6c757d
 ```
 
 ---
 
-## 4. Mapa de Saúde — Alertas e Severidade
+## Diagrama 4 — Mapa de Saúde do Cluster
 
 ```mermaid
 flowchart TD
-    CLUSTER["🏠 Cluster Kubernetes\ndocker-desktop · v1.34.2"]
+    CL["🌐 Cluster docker-desktop\nK8s v1.34.2"]
 
-    CLUSTER --> N1["✅ Nós\n3/3 Ready\nSem pressão de memória/disco"]
-    CLUSTER --> N2["✅ Deployments\n4/4 disponíveis"]
-    CLUSTER --> N3["⚠️ Aplicações"]
-    CLUSTER --> N4["🔴 Infraestrutura"]
+    CL --> NODES["Nós"]
+    NODES --> N1["✅ desktop-control-plane\nReady · Sem pressão"]
+    NODES --> N2["✅ desktop-worker\nReady · Sem pressão"]
+    NODES --> N3["✅ desktop-worker2\nReady · Sem pressão"]
 
-    N3 --> A1["⚠️ kube-news\n2 restarts\nstartup probe falhou\naguardando postgres"]
-    N3 --> A2["⚠️ desktop-worker\nNó ocioso\nsem workloads\nde aplicação"]
-    N3 --> A3["⚠️ Metrics Server\nNão instalado\nkubectl top inoperante"]
+    CL --> APPS["Aplicações"]
+    APPS --> A1["⚠️ kube-news\n1/1 Running\n2 restarts históricos"]
+    APPS --> A2["✅ postgres\n1/1 Running\n0 restarts"]
 
-    N4 --> B1["🔴 postgres\nSem PVC\nDados efêmeros\nrisco de perda total"]
-    N4 --> B2["🔴 Sem Ingress\nport-forward manual\nfrágil e temporário"]
-    N4 --> B3["🔴 Credenciais\nem texto plano\nDB_PASSWORD exposto\nnos manifests"]
+    CL --> INFRA["Infraestrutura"]
+    INFRA --> I1["✅ CoreDNS 2/2"]
+    INFRA --> I2["✅ local-path-provisioner"]
+    INFRA --> I3["❌ Metrics Server\nausentado"]
+    INFRA --> I4["❌ Ingress Controller\nausente"]
+
+    CL --> SEC["Segurança"]
+    SEC --> S1["🔴 Credenciais em plaintext\nkube-news + postgres"]
+    SEC --> S2["🔴 Postgres sem PVC\nrisco de perda de dados"]
+    SEC --> S3["⚠️ Race condition\nna inicialização"]
+
+    style A1 fill:#fff3cd,stroke:#ffc107
+    style I3 fill:#f8d7da,stroke:#dc3545
+    style I4 fill:#f8d7da,stroke:#dc3545
+    style S1 fill:#f8d7da,stroke:#dc3545
+    style S2 fill:#f8d7da,stroke:#dc3545
+    style S3 fill:#fff3cd,stroke:#ffc107
 ```
 
 ---
 
-## 5. Prioridade de Melhorias
+## Diagrama 5 — Prioridade de Melhorias
 
 ```mermaid
 quadrantChart
-    title Melhorias — Impacto vs Urgência
+    title Prioridade de Melhorias do Cluster
     x-axis Baixa Urgência --> Alta Urgência
     y-axis Baixo Impacto --> Alto Impacto
     quadrant-1 Fazer Agora
     quadrant-2 Planejar
     quadrant-3 Avaliar
-    quadrant-4 Monitorar
-    PVC para Postgres: [0.85, 0.95]
-    Ingress Controller: [0.80, 0.85]
-    Secrets p/ Credenciais: [0.75, 0.90]
-    Metrics Server: [0.60, 0.70]
-    Replicas kube-news x2: [0.55, 0.75]
-    HPA: [0.45, 0.65]
-    AntiAffinity Workers: [0.40, 0.60]
-    NetworkPolicy: [0.30, 0.55]
-    ResourceQuota: [0.25, 0.40]
-    PodDisruptionBudget: [0.20, 0.45]
+    quadrant-4 Agendar
+    Secrets para credenciais: [0.85, 0.90]
+    PVC para postgres: [0.80, 0.95]
+    initContainer race condition: [0.70, 0.75]
+    Ingress NGINX Controller: [0.55, 0.80]
+    Metrics Server: [0.45, 0.55]
+    HPA para kube-news: [0.30, 0.65]
+    Múltiplas réplicas: [0.35, 0.70]
+    Imagem no registry externo: [0.20, 0.45]
 ```
 
 ---
 
-## 6. Sequência de Inicialização dos Pods
-
-Mostra a ordem de startup e o motivo dos 2 restarts do kube-news.
+## Diagrama 6 — Sequência de Inicialização (com falhas)
 
 ```mermaid
 sequenceDiagram
     participant K8s as Kubernetes Scheduler
-    participant PG as Pod: postgres
-    participant APP as Pod: kube-news
-    participant PROBE as Startup Probe
+    participant PG as postgres pod
+    participant APP as kube-news pod
+    participant SVC as Service postgres<br/>(10.96.184.193:5432)
 
+    Note over K8s: 21:59:19 — Deploy aplicado
     K8s->>PG: Schedule → desktop-worker2
-    K8s->>APP: Schedule → desktop-worker2
-    PG-->>PG: pg_isready (startup delay 5s)
-    APP-->>PROBE: GET /health (delay 10s)
-    PROBE-->>APP: ❌ FAIL (postgres ainda iniciando)
-    APP-->>APP: restart #1
-    APP-->>PROBE: GET /health (delay 10s)
-    PROBE-->>APP: ❌ FAIL (postgres ainda iniciando)
-    APP-->>APP: restart #2
-    PG-->>PG: ✅ pg_isready OK — postgres pronto
-    APP-->>PROBE: GET /health (delay 10s)
-    PROBE-->>APP: ✅ OK
-    APP-->>APP: Running (estável)
+    K8s->>APP: Schedule → desktop-worker
+
+    Note over PG: Imagem já presente (no pull)
+    PG->>PG: Iniciando PostgreSQL...
+    Note over APP: Pull kube-news:1.0.0 (979ms)
+
+    APP->>SVC: Tentativa 1: connect 10.96.184.193:5432
+    SVC-->>APP: ECONNREFUSED ❌ (postgres ainda inicializando)
+    APP->>APP: CRASH — exit code não zero
+
+    Note over K8s: BackOff — aguarda antes de reiniciar
+
+    APP->>SVC: Tentativa 2: connect 10.96.184.193:5432
+    SVC-->>APP: ECONNREFUSED ❌ (postgres ainda inicializando)
+    APP->>APP: CRASH — 2º restart
+
+    Note over PG: ~21:59:30 — PostgreSQL pronto (pg_isready OK)
+    PG->>SVC: Readiness probe: SUCCESS ✅
+
+    APP->>SVC: Tentativa 3: connect 10.96.184.193:5432
+    SVC->>PG: Forward → 5432
+    PG-->>APP: Conexão aceita ✅
+
+    Note over APP: 21:59:44 — kube-news estável<br/>Running · 2 restarts registrados
+
+    Note over APP,PG: Solução: initContainer em kube-news<br/>aguardaria postgres antes de iniciar
 ```
-
----
-
-## Como renderizar
-
-| Ferramenta | Como usar |
-|---|---|
-| **GitHub** | Abra `diagrama-palestra.md` — renderiza automaticamente |
-| **VS Code** | Extensão [Mermaid Preview](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid) |
-| **Obsidian** | Suporte nativo a blocos `mermaid` |
-| **CLI (export PNG/SVG)** | `npx mmdc -i diagrama-palestra.md -o diagrama-palestra.png` |
