@@ -1,0 +1,199 @@
+# =============================================================================
+# Kube-News — Manifestos Kubernetes
+# Gerado com base no Dockerfile (node:18-alpine) e docker-compose.yml do projeto
+# Ordem: dependências primeiro (postgres), aplicação principal por último
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. PostgreSQL — Deployment
+# Imagem: postgres:15-alpine (espelho exato do docker-compose.yml)
+# Healthcheck alinhado com: pg_isready -U kubedevnews -d kubedevnews
+# startupProbe: dá tempo para inicialização a frio antes das probes regulares
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: kube-news
+    component: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-news
+      component: db
+  template:
+    metadata:
+      labels:
+        app: kube-news
+        component: db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "kubedevnews"
+            - name: POSTGRES_USER
+              value: "kubedevnews"
+            - name: POSTGRES_PASSWORD
+              value: "Pg#123"          # ⚠️  mover para Secret antes de ir para produção
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          startupProbe:             # aguarda até 60s pelo primeiro start do PostgreSQL
+            exec:
+              command: ["pg_isready", "-U", "kubedevnews", "-d", "kubedevnews"]
+            initialDelaySeconds: 5
+            periodSeconds: 6
+            timeoutSeconds: 5
+            failureThreshold: 10    # 10 × 6s = 60s máximo para o banco subir
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "kubedevnews", "-d", "kubedevnews"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5     # espelha retries: 5 do healthcheck do docker-compose
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "kubedevnews", "-d", "kubedevnews"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+# -----------------------------------------------------------------------------
+# 2. PostgreSQL — Service
+# ClusterIP: acessível apenas internamente pelo nome "postgres"
+# A app usa DB_HOST=postgres que resolve para este Service
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: kube-news
+    component: db
+spec:
+  type: ClusterIP
+  selector:
+    app: kube-news
+    component: db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+
+---
+# -----------------------------------------------------------------------------
+# 3. Kube-News App — Deployment
+# Imagem: construída a partir de src/Dockerfile (node:18-alpine, usuário não-root)
+# Docker Desktop: imagens buildadas localmente já ficam disponíveis ao cluster.
+# Para registry externo, substituir por: ghcr.io/seu-usuario/kube-news:abc1234
+#
+# startupProbe: equivalente ao depends_on: condition: service_healthy do compose
+#   — impede que as probes regulares falhem enquanto o banco ainda não está pronto
+# livenessProbe: alinhada com o HEALTHCHECK do Dockerfile
+#   (--interval=30s --timeout=5s --start-period=10s --retries=3)
+# readinessProbe: usa /ready, que o app controla via /unreadyfor/:seconds
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-news
+  labels:
+    app: kube-news
+    component: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-news
+      component: app
+  template:
+    metadata:
+      labels:
+        app: kube-news
+        component: app
+    spec:
+      containers:
+        - name: kube-news
+          image: kube-news:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "postgres"       # resolve pelo nome do Service acima
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_DATABASE
+              value: "kubedevnews"
+            - name: DB_USERNAME
+              value: "kubedevnews"
+            - name: DB_PASSWORD
+              value: "Pg#123"         # ⚠️  mover para Secret antes de ir para produção
+            - name: DB_SSL_REQUIRE
+              value: "false"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          startupProbe:               # substitui o depends_on: service_healthy do compose
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12      # 12 × 10s = 120s para app + banco subirem juntos
+          readinessProbe:
+            httpGet:
+              path: /ready            # controlado por /unreadyfor/:s — perfeito para readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health           # espelha o HEALTHCHECK do Dockerfile
+              port: http
+            initialDelaySeconds: 10   # alinhado com --start-period=10s do Dockerfile
+            periodSeconds: 30         # alinhado com --interval=30s do Dockerfile
+            timeoutSeconds: 5         # alinhado com --timeout=5s do Dockerfile
+            failureThreshold: 3       # alinhado com --retries=3 do Dockerfile
+
+---
+# -----------------------------------------------------------------------------
+# 4. Kube-News App — Service
+# Porta 80 externamente → 8080 no container (porta real do app.listen(8080))
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-news
+  labels:
+    app: kube-news
+    component: app
+spec:
+  type: ClusterIP
+  selector:
+    app: kube-news
+    component: app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

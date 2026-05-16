@@ -107,3 +107,10 @@ node_modules/
 
 # volumes locais de desenvolvimento
 .docker_vol/
+
+# macOS
+.DS_Store
+
+# Claude Code — configurações locais de máquina (não versionar)
+.claude/settings.local.json
+.agents/
