@@ -1,5 +1,5 @@
 ---
-name: k8s-postmortem
+name: claude_devops_1605
 description: >
   Use esta skill SEMPRE que o usuário pedir para diagnosticar, auditar, inspecionar ou gerar relatório
   de um cluster Kubernetes local (Docker Desktop, kind, minikube). Ative também quando o usuário
