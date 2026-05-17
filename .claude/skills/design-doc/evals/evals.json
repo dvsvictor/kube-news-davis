@@ -1,0 +1,20 @@
+{
+  "skill_name": "design-doc",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "escreve um ADR registrando a decisão de usar Alpine como base das imagens Docker",
+      "expected_output": "ADR completo salvo em docs/adr/ADR-0001-usar-alpine-base-imagens-docker.md com seções: Status (Aceito), Contexto (tamanho de imagem, segurança), Decisão (node:18-alpine, com dados concretos de tamanho), Consequências (positivas e negativas), e pelo menos 2 alternativas descartadas com argumento específico. docs/INDEX.md criado ou atualizado com ponteiro."
+    },
+    {
+      "id": 2,
+      "prompt": "quero propor usar Helm Charts no lugar dos manifestos YAML estáticos do k8s/, cria um RFC para isso",
+      "expected_output": "RFC completo salvo em docs/rfc/RFC-0001-helm-chart-substituir-manifestos-yaml.md com seções: Sumário (proposta clara), Motivação (limitações do sed+kubectl atual), Design Detalhado (estrutura do chart, mudanças no pipeline), Drawbacks (complexidade Helm), Alternativas (Kustomize, manter sed), Questões em Aberto (pelo menos 2), e Plano de Implementação em fases. docs/INDEX.md atualizado."
+    },
+    {
+      "id": 3,
+      "prompt": "cria um design doc completo do sistema de CI/CD do projeto, documentando arquitetura, fluxo e decisões",
+      "expected_output": "Design Doc salvo em docs/design/pipeline-cicd.md com todas as seções obrigatórias: Overview, Contexto, Goals/Non-Goals (Non-Goals explícitos), Design Detalhado com diagrama Mermaid do pipeline, Componentes (build-push, smoke-test, deploy), Alternativas Consideradas, Segurança, Testing, Plano de Implementação e Open Questions. Usa dados reais do arquivo .github/workflows/ci-cd.yml."
+    }
+  ]
+}
