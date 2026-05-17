@@ -66,13 +66,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Subir ambiente com docker compose
-        run: docker compose up -d
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 
       - name: Aguardar app ficar saudável
         run: |
           echo "Aguardando /health responder..."
           for i in $(seq 1 30); do
-            if docker compose exec -T app wget -qO- http://localhost:8080/health; then
+            if docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T app wget -qO- http://localhost:8080/health; then
               echo "App saudável!"
               exit 0
             fi
@@ -80,12 +80,12 @@ jobs:
             sleep 5
           done
           echo "Timeout: app não ficou saudável em 150s"
-          docker compose logs app
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml logs app
           exit 1
 
       - name: Derrubar ambiente
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 
   # ---------------------------------------------------------------------------
   # Job 3: Deploy automático no cluster local

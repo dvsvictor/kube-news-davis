@@ -6,7 +6,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 COPY package*.json ./
 
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && chown -R appuser:appgroup node_modules
 
 COPY --chown=appuser:appgroup . .
 
