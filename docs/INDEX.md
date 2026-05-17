@@ -26,6 +26,7 @@ Para criar novos documentos, use a skill `design-doc`.
 | [ADR-0007 — Usar Kubernetes Secret para credenciais do banco](adr/ADR-0007-usar-kubernetes-secret-para-credenciais-do-banco.md) | Aceito | Secret `postgres-secret` substituindo `DB_PASSWORD` em texto plano nos manifestos |
 | [ADR-0008 — Usar NGINX Ingress Controller para acesso externo](adr/ADR-0008-usar-nginx-ingress-controller-para-acesso-externo.md) | Aceito | NGINX Ingress + host `kube-news.local` como proxy HTTP real em vez de port-forward |
 | [ADR-0009 — Usar Terraform para provisionamento Kubernetes](adr/ADR-0009-usar-terraform-para-provisionamento-kubernetes.md) | Aceito | Provider `hashicorp/kubernetes ~> 2.27` com estado local para IaC declarativo |
+| [ADR-0010 — Pipeline CI/CD em três jobs sequenciais no GitHub Actions](adr/ADR-0010-pipeline-cicd-github-actions-tres-jobs.md) | Aceito | build-push (ubuntu-latest) → smoke-test (ubuntu-latest) → deploy (self-hosted, push main only) |
 
 ---
 
