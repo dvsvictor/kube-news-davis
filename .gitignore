@@ -114,3 +114,13 @@ node_modules/
 # Claude Code — configurações locais de máquina (não versionar)
 .claude/settings.local.json
 .agents/
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/override.tf
+terraform/override.tf.json
