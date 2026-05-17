@@ -72,11 +72,12 @@ jobs:
         run: |
           echo "Aguardando /health responder..."
           for i in $(seq 1 30); do
-            if docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T app wget -qO- http://localhost:8080/health; then
+            if wget -qO- http://localhost:8080/health; then
               echo "App saudável!"
               exit 0
             fi
             echo "Tentativa $i/30 — aguardando 5s..."
+            docker compose -f docker-compose.yml -f docker-compose.ci.yml ps app
             sleep 5
           done
           echo "Timeout: app não ficou saudável em 150s"

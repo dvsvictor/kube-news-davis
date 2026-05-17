@@ -2,3 +2,4 @@ services:
   app:
     volumes: []
     command: ["node", "server.js"]
+    restart: "no"
