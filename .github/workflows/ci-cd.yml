@@ -1,0 +1,125 @@
+name: CI/CD — Kube-News
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE_NAME: dvsvictor/kube-news
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Build e push da imagem para o Docker Hub
+  # Roda em todo PR e push para main
+  # ---------------------------------------------------------------------------
+  build-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Gerar metadados da imagem
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+
+      - name: Build e push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Smoke test com docker compose (app + banco)
+  # Roda em todo PR e push para main, após build-push
+  # ---------------------------------------------------------------------------
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: build-push
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Subir ambiente com docker compose
+        run: docker compose up -d
+
+      - name: Aguardar app ficar saudável
+        run: |
+          echo "Aguardando /health responder..."
+          for i in $(seq 1 30); do
+            if docker compose exec -T app wget -qO- http://localhost:8080/health; then
+              echo "App saudável!"
+              exit 0
+            fi
+            echo "Tentativa $i/30 — aguardando 5s..."
+            sleep 5
+          done
+          echo "Timeout: app não ficou saudável em 150s"
+          docker compose logs app
+          exit 1
+
+      - name: Derrubar ambiente
+        if: always()
+        run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Deploy automático no cluster local
+  # Roda APENAS em push para main (não em PRs)
+  # Requer self-hosted runner na máquina com kubectl e docker
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy
+    runs-on: self-hosted
+    needs: smoke-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Atualizar tag da imagem no deploy.yaml
+        run: |
+          sed -i "s|image: ${{ env.IMAGE_NAME }}:.*|image: ${{ env.IMAGE_NAME }}:${{ needs.smoke-test.outputs.image_tag || needs.build-push.outputs.image_tag }}|" k8s/deploy.yaml
+
+      - name: Aplicar manifestos (em ordem)
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/secrets.yaml
+          kubectl apply -f k8s/pvc.yaml
+          kubectl apply -f k8s/deploy.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Aguardar rollout
+        run: |
+          kubectl rollout status deployment/kube-news -n kube-news --timeout=120s
+
+      - name: Verificar pods após deploy
+        run: |
+          kubectl get pods -n kube-news
+          kubectl get ingress -n kube-news

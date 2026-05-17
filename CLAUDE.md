@@ -59,6 +59,7 @@ Antes de criar qualquer infraestrutura, manifesto, Dockerfile ou script, ative a
 | `postgres-k8s` | Acesso ao PostgreSQL no cluster, queries, Secrets, logs, conectividade app↔banco |
 | `claude_devops_1605` | Diagnóstico completo do cluster: relatório, diagramas Mermaid, postmortem |
 | `gerar-diagrama` | Gerar ou atualizar diagramas Mermaid de arquitetura |
+| `git-commit-guard` | **Ativar a cada commit** — verifica branch, nome, arquivos sensíveis, compõe mensagem em pt-BR no imperativo e inclui Co-Authored-By |
 
 Para ativar uma skill, use a ferramenta `Skill` antes de responder à tarefa.
 
@@ -179,6 +180,85 @@ Acesso: **http://localhost:8080**
 - Nunca use `docker system prune` sem confirmação explícita
 - Imagens de produção sempre baseadas em Alpine — sem `node:18` genérico
 - Build sempre a partir de `./src` — `docker build -t kube-news:1.0.0 ./src`
+
+---
+
+## CI/CD — GitHub Actions
+
+Pipeline em `.github/workflows/ci-cd.yml` com 3 jobs em sequência:
+
+```
+[build-push] → [smoke-test] → [deploy]
+     ↑               ↑              ↑
+   PR + push       PR + push    push main
+                                (self-hosted)
+```
+
+| Job | Runner | Quando roda | O que faz |
+|-----|--------|------------|-----------|
+| `build-push` | `ubuntu-latest` | Todo PR e push em `main` | Build + push para Docker Hub com tag SHA |
+| `smoke-test` | `ubuntu-latest` | Todo PR e push em `main` | `docker compose up` + curl no `/health` |
+| `deploy` | `self-hosted` | Apenas push em `main` | `kubectl apply` + aguarda rollout |
+
+### Secrets obrigatórios no repositório GitHub
+
+| Secret | Como obter |
+|--------|-----------|
+| `DOCKER_USERNAME` | Login do Docker Hub |
+| `DOCKER_PASSWORD` | Docker Hub → Security → New Access Token |
+| `KUBECONFIG_B64` | `cat ~/.kube/config \| base64` |
+
+### Self-hosted runner (deploy local)
+
+O job `deploy` precisa de um runner na mesma máquina que o cluster:
+
+```bash
+# GitHub → Settings → Actions → Runners → New self-hosted runner → macOS
+mkdir ~/actions-runner && cd ~/actions-runner
+# Seguir comandos exibidos pelo GitHub (download + configure)
+./run.sh   # ou: ./svc.sh install && ./svc.sh start
+```
+
+### Estratégia de tags de imagem
+
+| Evento | Tags geradas |
+|--------|-------------|
+| Push para `main` | `dvsvictor/kube-news:<sha7>`, `dvsvictor/kube-news:main` |
+| Pull Request | `dvsvictor/kube-news:<sha7>` |
+
+---
+
+## Infraestrutura Kubernetes — arquivos
+
+| Arquivo | Descrição | Aplicar antes de |
+|---------|-----------|-----------------|
+| `k8s/namespace.yaml` | Namespace `kube-news` | Todos os outros |
+| `k8s/secrets.yaml` | Secret `postgres-secret` com senha em base64 | `deploy.yaml` |
+| `k8s/pvc.yaml` | PVC `postgres-pvc` (1Gi) para dados do PostgreSQL | `deploy.yaml` |
+| `k8s/deploy.yaml` | Deployments e Services (usa Secret e PVC) | `ingress.yaml` |
+| `k8s/ingress.yaml` | Ingress com host `kube-news.local` | — |
+
+**Instalar NGINX Ingress Controller (uma vez):**
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/cloud/deploy.yaml
+```
+
+**Adicionar ao `/etc/hosts` para acesso local:**
+
+```bash
+echo "127.0.0.1 kube-news.local" | sudo tee -a /etc/hosts
+```
+
+**Aplicar tudo em ordem:**
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secrets.yaml
+kubectl apply -f k8s/pvc.yaml
+kubectl apply -f k8s/deploy.yaml
+kubectl apply -f k8s/ingress.yaml
+```
 
 ---
 

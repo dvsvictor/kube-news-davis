@@ -2,6 +2,9 @@
 # Kube-News — Manifestos Kubernetes
 # Gerado com base no Dockerfile (node:18-alpine) e docker-compose.yml do projeto
 # Ordem: dependências primeiro (postgres), aplicação principal por último
+# Namespace: kube-news (ver namespace.yaml)
+# Credenciais: postgres-secret (ver secrets.yaml)
+# Persistência: postgres-pvc 1Gi (ver pvc.yaml)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -14,6 +17,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
+  namespace: kube-news
   labels:
     app: kube-news
     component: db
@@ -41,7 +45,13 @@ spec:
             - name: POSTGRES_USER
               value: "kubedevnews"
             - name: POSTGRES_PASSWORD
-              value: "Pg#123"          # ⚠️  mover para Secret antes de ir para produção
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
           resources:
             requests:
               cpu: "100m"
@@ -69,6 +79,10 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
 
 ---
 # -----------------------------------------------------------------------------
@@ -80,6 +94,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
+  namespace: kube-news
   labels:
     app: kube-news
     component: db
@@ -96,9 +111,8 @@ spec:
 ---
 # -----------------------------------------------------------------------------
 # 3. Kube-News App — Deployment
-# Imagem: construída a partir de src/Dockerfile (node:18-alpine, usuário não-root)
-# Docker Desktop: imagens buildadas localmente já ficam disponíveis ao cluster.
-# Para registry externo, substituir por: ghcr.io/seu-usuario/kube-news:abc1234
+# Imagem: dvsvictor/kube-news:<sha> — publicada via pipeline GitHub Actions
+# imagePullPolicy: Always — garante que o cluster busca a tag atualizada
 #
 # startupProbe: equivalente ao depends_on: condition: service_healthy do compose
 #   — impede que as probes regulares falhem enquanto o banco ainda não está pronto
@@ -110,6 +124,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kube-news
+  namespace: kube-news
   labels:
     app: kube-news
     component: app
@@ -127,8 +142,8 @@ spec:
     spec:
       containers:
         - name: kube-news
-          image: kube-news:1.0.0
-          imagePullPolicy: IfNotPresent
+          image: dvsvictor/kube-news:main
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8080
@@ -142,7 +157,10 @@ spec:
             - name: DB_USERNAME
               value: "kubedevnews"
             - name: DB_PASSWORD
-              value: "Pg#123"         # ⚠️  mover para Secret antes de ir para produção
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
             - name: DB_SSL_REQUIRE
               value: "false"
           resources:
@@ -185,6 +203,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kube-news
+  namespace: kube-news
   labels:
     app: kube-news
     component: app
