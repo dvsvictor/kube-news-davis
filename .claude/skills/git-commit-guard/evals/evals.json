@@ -1,0 +1,20 @@
+{
+  "skill_name": "git-commit-guard",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "commita isso",
+      "expected_output": "Verificar branch atual. Se for main, bloquear e sugerir nome de branch. Caso contrário, rodar git status + git diff, confirmar arquivos, compor mensagem em português no imperativo, fazer git add com arquivos específicos e commitar com Co-Authored-By no rodapé."
+    },
+    {
+      "id": 2,
+      "prompt": "faz commit com a mensagem 'added new ingress manifest'",
+      "expected_output": "Detectar que a mensagem está em inglês e no passado. Adaptar para português no imperativo (ex: 'Adicionar manifesto de Ingress'). Confirmar com o usuário antes de usar a mensagem adaptada. Verificar branch e arquivos antes de commitar."
+    },
+    {
+      "id": 3,
+      "prompt": "git commit -A",
+      "expected_output": "Nunca executar git add -A. Listar os arquivos modificados via git status, perguntar quais devem ser incluídos e fazer git add com arquivos específicos. Verificar se algum arquivo é sensível (.env, credentials, etc.)."
+    }
+  ]
+}
