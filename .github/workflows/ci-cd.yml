@@ -122,7 +122,7 @@ jobs:
 
       - name: Atualizar tag da imagem no deploy.yaml
         run: |
-          sed -i "s|image: ${{ env.IMAGE_NAME }}:.*|image: ${{ env.IMAGE_NAME }}:${{ needs.smoke-test.outputs.image_tag || needs.build-push.outputs.image_tag }}|" k8s/deploy.yaml
+          sed -i '' "s|image: ${{ env.IMAGE_NAME }}:.*|image: ${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image_tag }}|" k8s/deploy.yaml
 
       - name: Aplicar manifestos (em ordem)
         run: |
