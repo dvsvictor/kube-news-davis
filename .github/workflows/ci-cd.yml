@@ -65,8 +65,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build da imagem
+        run: docker compose -f docker-compose.ci.yml build --no-cache
+
       - name: Subir ambiente com docker compose
-        run: docker compose -f docker-compose.ci.yml up -d --build
+        run: docker compose -f docker-compose.ci.yml up -d
+
+      - name: Logs iniciais do app (10s após subir)
+        run: |
+          sleep 10
+          echo "=== docker compose ps ==="
+          docker compose -f docker-compose.ci.yml ps
+          echo "=== logs do app ==="
+          docker compose -f docker-compose.ci.yml logs app
 
       - name: Aguardar app ficar saudável
         run: |
@@ -80,7 +91,7 @@ jobs:
             docker compose -f docker-compose.ci.yml ps app
             sleep 5
           done
-          echo "Timeout: app não ficou saudável em 150s"
+          echo "=== Timeout: logs completos do app ==="
           docker compose -f docker-compose.ci.yml logs app
           exit 1
 
