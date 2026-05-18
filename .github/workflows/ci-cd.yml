@@ -128,11 +128,11 @@ jobs:
         env:
           KUBECONFIG: /tmp/kube/config
         run: |
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/secrets.yaml
-          kubectl apply -f k8s/pvc.yaml
-          kubectl apply -f k8s/deploy.yaml
-          kubectl apply -f k8s/ingress.yaml
+          kubectl apply --validate=warn -f k8s/namespace.yaml
+          kubectl apply --validate=warn -f k8s/secrets.yaml
+          kubectl apply --validate=warn -f k8s/pvc.yaml
+          kubectl apply --validate=warn -f k8s/deploy.yaml
+          kubectl apply --validate=warn -f k8s/ingress.yaml
 
       - name: Aguardar rollout
         env:

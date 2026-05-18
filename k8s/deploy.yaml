@@ -2,11 +2,19 @@
 # Kube-News — Manifestos Kubernetes
 # Gerado com base no Dockerfile (node:18-alpine) e docker-compose.yml do projeto
 # Ordem: dependências primeiro (postgres), aplicação principal por último
-# Namespace: kube-news (ver namespace.yaml)
-# Credenciais: postgres-secret (ver secrets.yaml)
-# Persistência: postgres-pvc 1Gi (ver pvc.yaml)
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# 0. Namespace
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-news
+  labels:
+    app: kube-news
+
+---
 # -----------------------------------------------------------------------------
 # 1. PostgreSQL — Deployment
 # Imagem: postgres:15-alpine (espelho exato do docker-compose.yml)

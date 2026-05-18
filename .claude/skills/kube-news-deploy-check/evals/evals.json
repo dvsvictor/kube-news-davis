@@ -1,0 +1,23 @@
+{
+  "skill_name": "kube-news-deploy-check",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "executei kubectl apply -f k8s/deploy.yaml e apareceu: Error from server (NotFound): namespaces 'kube-news' not found. o que fazer?",
+      "expected_output": "A skill deve executar as 6 etapas: verificar namespace (criar se ausente), verificar secret, verificar pvc, aplicar deploy e aguardar pods Ready, verificar port-forward, testar /health. Deve apresentar tabela de status ao final.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "o app kube-news não está abrindo no localhost. o pod está em CreateContainerConfigError.",
+      "expected_output": "A skill deve identificar que o Secret postgres-secret está ausente, aplicar secrets.yaml, e prosseguir pelas demais etapas até confirmar que o app responde 200 em /health.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "verificar se o ambiente kube-news está saudável e funcionando.",
+      "expected_output": "A skill deve executar todas as 6 etapas de verificação. Como o ambiente já está rodando, todas devem retornar OK sem precisar de correção. Relatório final deve mostrar tudo verde.",
+      "files": []
+    }
+  ]
+}
