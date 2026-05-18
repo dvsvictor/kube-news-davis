@@ -114,19 +114,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar kubeconfig
-        run: |
-          mkdir -p /tmp/kube
-          echo "${{ secrets.KUBECONFIG_B64 }}" | tr -d ' \n' | base64 -d > /tmp/kube/config
-          chmod 600 /tmp/kube/config
+      - name: Verificar acesso ao cluster
+        run: kubectl cluster-info
 
       - name: Atualizar tag da imagem no deploy.yaml
         run: |
           sed -i '' "s|image: ${{ env.IMAGE_NAME }}:.*|image: ${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image_tag }}|" k8s/deploy.yaml
 
       - name: Aplicar manifestos (em ordem)
-        env:
-          KUBECONFIG: /tmp/kube/config
         run: |
           kubectl apply --validate=warn -f k8s/namespace.yaml
           kubectl apply --validate=warn -f k8s/secrets.yaml
@@ -135,14 +130,9 @@ jobs:
           kubectl apply --validate=warn -f k8s/ingress.yaml
 
       - name: Aguardar rollout
-        env:
-          KUBECONFIG: /tmp/kube/config
-        run: |
-          kubectl rollout status deployment/kube-news -n kube-news --timeout=120s
+        run: kubectl rollout status deployment/kube-news -n kube-news --timeout=120s
 
       - name: Verificar pods após deploy
-        env:
-          KUBECONFIG: /tmp/kube/config
         run: |
           kubectl get pods -n kube-news
           kubectl get ingress -n kube-news
