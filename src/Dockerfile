@@ -2,16 +2,17 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
-    chown appuser:appgroup /app
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --chown=appuser:appgroup package*.json ./
-
-USER appuser
+COPY package*.json ./
 
 RUN npm ci --omit=dev
 
 COPY --chown=appuser:appgroup . .
+
+RUN chown -R appuser:appgroup /app/node_modules
+
+USER appuser
 
 EXPOSE 8080
 

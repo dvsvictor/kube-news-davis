@@ -16,6 +16,7 @@ services:
     build:
       context: ./src
       dockerfile: Dockerfile
+    command: ["node", "server.js"]
     ports:
       - "8080:8080"
     environment:
