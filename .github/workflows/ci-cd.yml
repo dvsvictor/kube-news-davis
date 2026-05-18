@@ -107,7 +107,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: self-hosted
-    needs: smoke-test
+    needs: [smoke-test, build-push]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
