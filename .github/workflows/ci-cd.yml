@@ -117,7 +117,7 @@ jobs:
       - name: Configurar kubeconfig
         run: |
           mkdir -p /tmp/kube
-          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > /tmp/kube/config
+          echo "${{ secrets.KUBECONFIG_B64 }}" | tr -d ' \n' | base64 -d > /tmp/kube/config
           chmod 600 /tmp/kube/config
 
       - name: Atualizar tag da imagem no deploy.yaml
